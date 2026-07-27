@@ -18,7 +18,6 @@ def find_ifc_value(category, text):
     mapping = {
         int(BuiltInCategory.OST_Doors): "IfcDoor",
         int(BuiltInCategory.OST_Ceilings): "IfcCovering",
-        int(BuiltInCategory.OST_Roofs): "IfcCovering",
         int(BuiltInCategory.OST_Stairs): "IfcStair",
         int(BuiltInCategory.OST_Windows): "IfcWindow",
         int(BuiltInCategory.OST_SpecialityEquipment): ("IfcDoor", "TRAPDOOR"),
@@ -76,6 +75,13 @@ def find_ifc_value(category, text):
             return 'IfcDoor', 'USERDEFINED'
         if 'alambrado' in text:
             return 'IfcRailing'
+            
+    elif category == int(BuiltInCategory.OST_Roofs):
+        if 'calha' in text:
+            return None
+        else: 
+            return  'IfcCovering'
+            
     else: 
         return mapping.get(category, None)
 
