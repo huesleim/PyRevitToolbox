@@ -114,19 +114,15 @@ def resolve_parentship(polygon_relationship, curve_array_objects_dict):
 
 def build_floor_groups(loop, parentship, curve_array_objects_dict):
 
-    # This floor starts with its outer boundary
     profile = [curve_array_objects_dict[loop]["curves"]]
 
-    # Direct children are holes of this floor
     children = parentship.get(loop, [])
 
     for child in children:
         profile.append(curve_array_objects_dict[child]["curves"])
 
-    # First result is this floor
     groups = [profile]
 
-    # Grandchildren start new floors
     for child in children:
         for grandchild in parentship.get(child, []):
             groups.extend(

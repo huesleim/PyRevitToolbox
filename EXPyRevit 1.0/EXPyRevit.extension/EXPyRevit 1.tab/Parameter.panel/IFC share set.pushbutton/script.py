@@ -27,11 +27,11 @@ def find_ifc_value(category, text):
         int(BuiltInCategory.OST_Casework): ("IfcFurnishingElement", "USERDEFINED"),
     }
     
-    if category ==int(BuiltInCategory.OST_MechanicalEquipment):
+    if category == int(BuiltInCategory.OST_MechanicalEquipment):
         if 'elevador' in text in text:
             return 'IfcSpace'
     
-    if category ==int(BuiltInCategory.OST_SpecialityEquipment):
+    if category == int(BuiltInCategory.OST_SpecialityEquipment):
         if 'alçapão' in text or 'trapdoor' in text:
             return 'IfcDoor', 'TRAPDOOR'    
         elif 'portão' in text:
