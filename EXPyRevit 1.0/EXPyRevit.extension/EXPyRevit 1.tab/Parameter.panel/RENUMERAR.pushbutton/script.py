@@ -9,11 +9,15 @@ doc = uidoc.Document
 
 
 def pick_sheets():
-    return [
-        e for e in
-        (doc.GetElement(id) for id in uidoc.Selection.GetElementIds())
-        if isinstance(e, ViewSheet)
-    ]
+    sheets = []
+
+    for element_id in uidoc.Selection.GetElementIds():
+        element = doc.GetElement(element_id)
+
+        if isinstance(element, ViewSheet):
+            sheets.append(element)
+
+    return sheets
 
 
 try:
