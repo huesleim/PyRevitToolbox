@@ -24,24 +24,34 @@ try:
     sheets = pick_sheets()
 
     if not sheets:
-        forms.alert("Please pre-select one or more sheets in the Project Browser.")
+        forms.alert("Before clicking this script, please select the sheets you want to renumber.")
         raise Exception("No sheets selected.")
 
     starting_number = forms.ask_for_string(
-        prompt="Número inicial",
+        prompt="Starting number",
         default="0001"
     )
 
     if not starting_number:
         raise Exception("Operation cancelled.")
 
-    width = len(starting_number)
+    
 
+    starting_number_int = []
+    for character in starting_number:
+        if character.isdigit():
+            starting_number_int.append(character)
+
+    starting_number = "".join(starting_number_int)
+    if not starting_number:
+        forms.alert("The starting number must contain at least one digit.")
+        raise Exception("Invalid sheet number.")
+    
     t = Transaction(doc, "Renumber sheets")
     t.Start()
 
     for i, sheet in enumerate(sheets):
-        sheet.SheetNumber = str(int(starting_number) + i).zfill(width)
+        sheet.SheetNumber = str(int(starting_number) + i).zfill(len(starting_number))
 
     t.Commit()
 
