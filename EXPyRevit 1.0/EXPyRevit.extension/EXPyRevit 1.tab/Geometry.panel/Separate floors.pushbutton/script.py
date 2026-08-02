@@ -55,26 +55,22 @@ def process_floors(floor):
     
     return curve_array_objects_dict
 
-def point_in_polygon_points(point, polygon_points):
+def check_if_inside(point, polygon_points):
     x, y = point.X, point.Y
     n = len(polygon_points)
-    k = n-1
-
     inside = False
 
     for l in range(n):
-        xl, yl = polygon_points[l].X, polygon_points[l].Y
-        xk, yk = polygon_points[k].X, polygon_points[k].Y
+        x0, y0 = polygon_points[l].X, polygon_points[l].Y
+        x1, y1 = polygon_points[(l + 1) % n].X, polygon_points[(l + 1) % n].Y
 
-        intersects = ((yl > y) != (yk > y)) and (
-            x < (xk - xl) * (y - yl) / (yk - yl) + xl
+        intersects = ((y0 > y) != (y1 > y)) and (
+            x < (x1 - x0) * (y - y0) / (y1 - y0) + x0
         )
 
         if intersects:
             inside = not inside
-        
-        k = l
-        
+
     return inside
 
 def compare_all_polygons(curve_array_objects_dict):
@@ -87,7 +83,7 @@ def compare_all_polygons(curve_array_objects_dict):
                 continue
             point = curve_array_objects_dict[i]["points"][0]
             polygon_points = curve_array_objects_dict[j]["points"]
-            result = point_in_polygon_points(point, polygon_points)
+            result = check_if_inside(point, polygon_points)
 
             if result: polygon_parents.append(j)
         polygon_relationship[i] = polygon_parents
