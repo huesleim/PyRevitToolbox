@@ -18,9 +18,9 @@ try:
     links_paths = {}
     links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
     folder = forms.pick_folder()
-    print ('Selected folder: {}'.format(folder))
     if not folder:
         forms.alert('No folder selected.', exitscript=True)
+    print ('Selected folder: {}'.format(folder))
 
     files_path = walk_folder(folder)
 
