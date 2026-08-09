@@ -15,6 +15,63 @@ from Autodesk.Revit.DB import (
 from pyrevit import forms
 import traceback
 
+def reload_keynote_table(doc):
+    links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
+
+
+    if len(links) == 0:
+        print("There are no linked revit files!")
+
+
+    for link in links:
+        link_name = Element.Name.GetValue(link)
+        link_file_ref = link.GetExternalFileReference()
+        path = link_file_ref.GetAbsolutePath()
+        linked_status = link_file_ref.GetLinkedFileStatus()
+
+        if (
+            linked_status.ToString() == "NotFound"
+            or linked_status.ToString() == "Unloaded"
+            or link.IsNestedLink
+            or link.IsLoaded == False
+        ):
+            continue
+
+        else:
+            open_options = OpenOptions()
+            link.Unload(None)
+            try:
+                linked_document = app.OpenDocumentFile(path, open_options)
+                print(
+                    "Opened {} successfully. Now proceeding to reload keynote table".format(
+                        link_name
+                    )
+                )
+            except Exception:
+                traceback.print_exc()
+                print("Failed to open {}. Moving to next link".format(link_name))
+                link.Reload()
+                continue
+
+            try:
+                reload_keynote_table(linked_document)
+
+            finally:
+                linked_document.Close()
+                link.Reload()
+
+
+    try:
+        t = Transaction(doc, "Reload keynote table on current file")
+        t.Start()
+        keynote_table = KeynoteTable.GetKeynoteTable(doc)
+        keynote_table.LoadFrom(keynote_file_ref, None)
+        t.Commit()
+        print("Na Victa eh assim! :p")
+
+    except Exception:
+        traceback.print_exc()
+
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
 app = __revit__.Application
@@ -31,58 +88,6 @@ keynote_file_ref = ExternalResourceReference.CreateLocalResource(
     PathType.Absolute,
 )
 
-links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
-if len(links) == 0:
-    print('There are no linked revit files!')
+reload_keynote_table(doc)
 
-
-for link in links:
-    link_name = Element.Name.GetValue(link)
-    link_file_ref = link.GetExternalFileReference()
-    path = link_file_ref.GetAbsolutePath()
-    linked_status = link_file_ref.GetLinkedFileStatus()
-
-    if linked_status.ToString() == 'NotFound' or linked_status.ToString() == 'Unloaded' or link.IsNestedLink or link.IsLoaded == False:
-        continue
-
-    else:
-        open_options = OpenOptions()
-        link.Unload(None)
-        try:
-            linked_document = app.OpenDocumentFile(path, open_options)
-            print('Opened {} successfully. Now proceeding to reload keynote table'.format(link_name))
-        except Exception:
-            traceback.print_exc()
-            print('Failed to open {}. Moving to next link'.format(link_name))
-            link.Reload()
-            continue
-
-        try:
-            keynote_table = KeynoteTable.GetKeynoteTable(linked_document)
-            link_transaction = Transaction(linked_document, 'test')
-            link_transaction.Start()
-            keynote_table.LoadFrom(keynote_file_ref, None)
-            link_transaction.Commit()
-            print('Keynote table reloaded successfully in linked file.')
-
-        except Exception:
-            traceback.print_exc()
-            if link_transaction.HasStarted():
-                link_transaction.RollBack()
-
-        finally:
-            linked_document.Close()
-            link.Reload()
-
-
-try:
-    t = Transaction(doc, 'Reload keynote table on current file')
-    t.Start()
-    keynote_table = KeynoteTable.GetKeynoteTable(doc)
-    keynote_table.LoadFrom(keynote_file_ref, None)
-    t.Commit()
-    print('Na Victa eh assim! :p')
-
-except Exception:
-    traceback.print_exc()
         

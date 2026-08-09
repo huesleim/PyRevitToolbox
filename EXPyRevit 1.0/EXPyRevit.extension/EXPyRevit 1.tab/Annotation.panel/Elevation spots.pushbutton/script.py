@@ -97,10 +97,7 @@ def check_untagged_rooms(unnoted_rooms, existing_tags):
     for tag in existing_tags:
         tagged_ids[tag.Room.Id] = tag
     for room_id, room_data in unnoted_rooms.items():
-        if room_id in tagged_ids:
-            room_data["tagged"] = tagged_ids[room_id]
-        else:
-            room_data["tagged"] = None
+        room_data["tagged"] = tagged_ids.get(room_id, None)
     return unnoted_rooms
 
 
