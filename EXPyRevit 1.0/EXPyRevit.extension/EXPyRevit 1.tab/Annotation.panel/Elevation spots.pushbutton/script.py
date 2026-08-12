@@ -104,14 +104,10 @@ def check_untagged_rooms(unnoted_rooms, existing_tags):
 
 def resolve_origin(unnoted_rooms):
     for room_data in unnoted_rooms.values():
-        if not room_data["tagged"]:
-            room_data["origin"] = room_data["room"].Location.Point
-        else:
-            tag = room_data["tagged"]
-            tag_location = tag.Location.Point
-            x, y, z = tag_location.X, tag_location.Y, tag_location.Z
-            new_origin = XYZ(x, y - 3, z + 3)
-            room_data["origin"] = new_origin
+        tag_location = room_data["room"].Location.Point
+        x, y, z = tag_location.X, tag_location.Y, tag_location.Z
+        new_origin = XYZ(x - 1, y - 2, z + 3)
+        room_data["origin"] = new_origin
     return unnoted_rooms
 
 def resolve_reference(unnoted_rooms):
@@ -127,15 +123,14 @@ def resolve_reference(unnoted_rooms):
         intersections = intersector.Find(room_data["origin"], direction)
         if intersections:
             room_data["reference"] = intersections[1].GetReference()
-            floor = doc.GetElement(room_data["reference"].ElementId)
             room_data["hit_point"] = XYZ(
                 room_data["origin"].X,
                 room_data["origin"].Y,
                 room_data["origin"].Z,
             )
-        print("reference:", Element.Name.GetValue(doc.GetElement(room_data["reference"].ElementId)))
-        print("Hit point:", room_data["hit_point"].Z)
-        print("Intersections:", len(intersections), intersections)
+            print("reference:", Element.Name.GetValue(doc.GetElement(room_data["reference"].ElementId)))
+            print("Hit point:", room_data["hit_point"].Z)
+            print("Intersections:", len(intersections), intersections)
     doc.Delete(helper_view.Id)
     return unnoted_rooms
 
@@ -216,6 +211,7 @@ try:
     )
     create_elevations(room_data)
     t.Commit()
+    print("POP!")
 
 except Exception:
     traceback.print_exc()
