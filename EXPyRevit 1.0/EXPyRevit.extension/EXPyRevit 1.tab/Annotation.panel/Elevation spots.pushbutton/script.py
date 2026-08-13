@@ -2,12 +2,12 @@ import traceback
 from pyrevit import forms
 from Autodesk.Revit.DB import (
     BuiltInCategory,
-    BuiltInParameter,
     Element,
     ElementCategoryFilter,
     FilteredElementCollector,
     FindReferenceTarget,
     ReferenceIntersector,
+    RevitLinkInstance,
     SpatialElementBoundaryLocation,
     SpatialElementBoundaryOptions,
     SpotDimensionType,
@@ -17,13 +17,54 @@ from Autodesk.Revit.DB import (
     ViewFamilyType,
     XYZ
 )
+def get_rooms():
+    rooms = []
+    current_level_name = (
+        doc.GetElement(currentview.GenLevel.Id).Name if currentview.GenLevel else None
+    )
 
-class elementListItem(forms.TemplateListItem):
-    @property
-    def name(self):
-        return Element.Name.GetValue(self.item)
+    crop_manager = currentview.GetCropRegionShapeManager()
+    crop_loops = crop_manager.GetCropShape()
 
+    link_instances = (
+        FilteredElementCollector(doc, currentview.Id)
+        .OfClass(RevitLinkInstance)
+        .ToElements()
+    )
 
+    for link_instance in link_instances:
+        link_doc = link_instance.GetLinkDocument()
+        if link_doc is None:
+            continue
+        transform = link_instance.GetTotalTransform()
+        linked_rooms = (
+            FilteredElementCollector(link_doc)
+            .OfCategory(BuiltInCategory.OST_Rooms)
+            .WhereElementIsNotElementType()
+            .ToElements()
+        )
+        for room in linked_rooms:
+            if not room.Level or room.Level.Name != current_level_name:
+                continue
+            if not room.Location:
+                continue
+            world_pt = transform.OfPoint(room.Location.Point)
+            for loop in crop_loops:
+                loop_points = [c.GetEndPoint(0) for c in loop]
+                if check_if_inside(world_pt, loop_points):
+                    rooms.append(room)
+                    break
+
+    host_rooms = (
+        FilteredElementCollector(doc, currentview.Id)
+        .OfCategory(BuiltInCategory.OST_Rooms)
+        .WhereElementIsNotElementType()
+        .ToElements()
+    )
+    rooms.extend(host_rooms)
+
+    print("Rooms found:", len(rooms))
+    return rooms
 
 def calc_area(points):
     n = len(points)
@@ -33,7 +74,6 @@ def calc_area(points):
         x1, y1 = points[(i + 1) % n].X, points[(i + 1) % n].Y
         area += (x0 * y1) - (x1 * y0)
     return abs(area) / 2
-
 
 def process_rooms(rooms):
     processed_rooms = {}
@@ -63,7 +103,6 @@ def process_rooms(rooms):
         }
     return processed_rooms
 
-
 def check_if_inside(point, polygon_points):
     x, y = point.X, point.Y
     n = len(polygon_points)
@@ -81,7 +120,6 @@ def check_if_inside(point, polygon_points):
 
     return inside
 
-
 def check_unnoted_rooms(processed_rooms, existing_elevations):
     unnoted_rooms = {}
     for room_id, room_data in processed_rooms.items():
@@ -92,15 +130,15 @@ def check_unnoted_rooms(processed_rooms, existing_elevations):
             unnoted_rooms[room_id] = room_data
     return unnoted_rooms
 
-
 def check_untagged_rooms(unnoted_rooms, existing_tags):
     tagged_ids = {}
     for tag in existing_tags:
+        if tag.Room is None:
+            continue
         tagged_ids[tag.Room.Id] = tag
     for room_id, room_data in unnoted_rooms.items():
         room_data["tagged"] = tagged_ids.get(room_id, None)
     return unnoted_rooms
-
 
 def resolve_origin(unnoted_rooms):
     for room_data in unnoted_rooms.values():
@@ -134,7 +172,6 @@ def resolve_reference(unnoted_rooms):
     doc.Delete(helper_view.Id)
     return unnoted_rooms
 
-
 def create_elevations(unnoted_rooms):
     for room_data in unnoted_rooms.values():
         print("Creating elevation for room:", Element.Name.GetValue(room_data["room"]))
@@ -154,7 +191,6 @@ def create_elevations(unnoted_rooms):
             )
             spot_elevation.ChangeTypeId(selected_type.Id)
 
-
 print("START")
 uidoc = __revit__.ActiveUIDocument
 doc = __revit__.ActiveUIDocument.Document
@@ -162,42 +198,53 @@ currentview = doc.ActiveView
 t = Transaction(doc, "Place Elevations")
 
 
-##REVIEW THIS
 try:
+    print("Current view:", currentview.Name)
     elevation_types = FilteredElementCollector(doc).OfClass(SpotDimensionType).ToElements()
     name_to_type = {Element.Name.GetValue(t): t for t in elevation_types}
     selected_name = forms.SelectFromList.show(list(name_to_type.keys()))
     print("Selected type:", selected_name)
-    if not selected_name:
+    if not selected_name: 
         forms.alert("No type selected.", exitscript=True)
     selected_type = name_to_type[selected_name]
     print("Selected type:", selected_type)
+
 except Exception:
     traceback.print_exc()
 
-rooms = (
-    FilteredElementCollector(doc, currentview.Id)
-    .OfCategory(BuiltInCategory.OST_Rooms)
-    .WhereElementIsNotElementType()
-    .ToElements()
-)
-print("Rooms found:", len(rooms))
+try:
+    # link_instances = FilteredElementCollector(doc).OfClass(RevitLinkInstance).ToElements()
+    # for link_instance in link_instances:
+    #     link_doc = link_instance.GetLinkDocument()
+    #     if link_doc is None:
+    #         continue
+    # rooms = (
+    #     FilteredElementCollector(doc, currentview.Id)
+    #     .OfCategory(BuiltInCategory.OST_Rooms)
+    #     .WhereElementIsNotElementType()
+    #     .ToElements()
+    # )
+    # print("Rooms found:", len(rooms))
 
-existing_elevations = (
-    FilteredElementCollector(doc, currentview.Id)
-    .OfCategory(BuiltInCategory.OST_SpotElevations)
-    .WhereElementIsNotElementType()
-    .ToElements()
-)
-print("Existing elevations found:", len(existing_elevations))
+    rooms = get_rooms()
 
-existing_tags = (
-    FilteredElementCollector(doc, currentview.Id)
-    .OfCategory(BuiltInCategory.OST_RoomTags)
-    .WhereElementIsNotElementType()
-    .ToElements()
-)
-print("Existing tags found:", len(existing_tags))
+    existing_elevations = (
+        FilteredElementCollector(doc, currentview.Id)
+        .OfCategory(BuiltInCategory.OST_SpotElevations)
+        .WhereElementIsNotElementType()
+        .ToElements()
+    )
+    print("Existing elevations found:", len(existing_elevations))
+
+    existing_tags = (
+        FilteredElementCollector(doc, currentview.Id)
+        .OfCategory(BuiltInCategory.OST_RoomTags)
+        .WhereElementIsNotElementType()
+        .ToElements()
+    )
+    print("Existing tags found:", len(existing_tags))
+except Exception:
+    traceback.print_exc()
 
 try:
     t.Start()

@@ -25,6 +25,8 @@ try:
     files_path = walk_folder(folder)
 
     for link in links:
+        if link.IsNestedLink:
+            continue
         name = Element.Name.GetValue(link)
         name_lower = name.lower()
         print ('Commencing reload for link: {}'.format(name))

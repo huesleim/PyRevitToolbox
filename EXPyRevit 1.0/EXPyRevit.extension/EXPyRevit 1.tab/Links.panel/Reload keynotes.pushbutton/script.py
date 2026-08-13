@@ -1,26 +1,38 @@
-from Autodesk.Revit.DB import (
-    ModelPathUtils,
-    FilteredElementCollector,
-    RevitLinkType,
-    OpenOptions,
-    KeynoteTable,
-    Transaction,
-    Element,
-    LinkedFileStatus,
-    ExternalResourceReference,
-    ExternalResourceTypes,
-    PathType,
-)
-
-from pyrevit import forms
 import traceback
 
+from Autodesk.Revit.DB import (
+    Element,
+    ExternalResourceReference,
+    ExternalResourceTypes,
+    FilteredElementCollector,
+    KeynoteTable,
+    ModelPathUtils,
+    OpenOptions,
+    PathType,
+    RevitLinkType,
+    Transaction,
+)
+from pyrevit import forms
 
-def reload_keynote_table(doc, visited=None):
+
+def unload_links(doc):
+    links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
+    unloaded_links = []
+    for link in links:
+        if link.IsLoaded:
+            link.Unload(None)
+            unloaded_links.append(link)
+    
+    return unloaded_links
+
+def reload_keynote_table(doc, links=None, visited=None):
     if visited is None:
         visited = set()
 
-    links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
+    root_links = links is not None
+
+    if not root_links:
+        links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
 
     if len(links) == 0:
         print("Last link in branch! Reloading keynote on this file")
@@ -29,14 +41,11 @@ def reload_keynote_table(doc, visited=None):
         link_name = Element.Name.GetValue(link)
         link_file_ref = link.GetExternalFileReference()
         path = link_file_ref.GetAbsolutePath()
-        linked_status = link_file_ref.GetLinkedFileStatus()
         path_str = ModelPathUtils.ConvertModelPathToUserVisiblePath(path).lower()
 
         if (
-            linked_status.ToString() == "NotFound"
-            or linked_status.ToString() == "Unloaded"
-            or link.IsNestedLink
-            or link.IsLoaded == False
+            link.IsNestedLink
+            or (not link.IsLoaded and not root_links)
             or path_str in visited
         ):
             continue
@@ -44,7 +53,8 @@ def reload_keynote_table(doc, visited=None):
         else:
             visited.add(path_str)
             open_options = OpenOptions()
-            link.Unload(None)
+            if not root_links:
+                link.Unload(None)
             try:
                 linked_document = app.OpenDocumentFile(path, open_options)
                 print(
@@ -59,13 +69,17 @@ def reload_keynote_table(doc, visited=None):
                 continue
 
             try:
-                reload_keynote_table(linked_document, visited)
+                reload_keynote_table(linked_document, visited=visited)
 
             finally:
                 linked_document.Close()
-                link.Reload()
+                if not root_links: 
+                    link.Reload()
 
     try:
+        print("DOC:", doc.PathName)
+        print("TITLE:", doc.Title)
+        print("IS LINKED:", doc.IsLinked)
         t = Transaction(doc, "Reload keynote table on current file")
         t.Start()
         keynote_table = KeynoteTable.GetKeynoteTable(doc)
@@ -91,6 +105,9 @@ keynote_file_ref = ExternalResourceReference.CreateLocalResource(
     model_path,
     PathType.Absolute,
 )
+print('Start')
+unloaded_links = unload_links(doc)
+reload_keynote_table(doc, unloaded_links)
+for link in unloaded_links: link.Reload()
 
-reload_keynote_table(doc)
 print("POP!")
