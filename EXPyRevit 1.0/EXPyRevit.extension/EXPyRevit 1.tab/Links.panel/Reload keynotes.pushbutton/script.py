@@ -2,6 +2,7 @@ import traceback
 
 from Autodesk.Revit.DB import (
     Element,
+    ElementClassFilter,
     ExternalResourceReference,
     ExternalResourceTypes,
     FilteredElementCollector,
@@ -9,6 +10,7 @@ from Autodesk.Revit.DB import (
     ModelPathUtils,
     OpenOptions,
     PathType,
+    RevitLinkInstance,
     RevitLinkType,
     Transaction,
 )
@@ -17,12 +19,20 @@ from pyrevit import forms
 
 def unload_links(doc):
     links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
+    print("Found {} loaded links".format(len(links)))
     unloaded_links = []
+    instance_filter = ElementClassFilter(RevitLinkInstance)
     for link in links:
+        if link.IsNestedLink:
+            continue
+        has_instance = len(link.GetDependentElements(instance_filter)) > 0
+        if not has_instance:
+            continue
+        print("Checking link:", Element.Name.GetValue(link))
         if link.IsLoaded:
             link.Unload(None)
+            print("Unloaded!")
             unloaded_links.append(link)
-    
     return unloaded_links
 
 def reload_keynote_table(doc, links=None, visited=None):
@@ -45,7 +55,6 @@ def reload_keynote_table(doc, links=None, visited=None):
 
         if (
             link.IsNestedLink
-            or (not link.IsLoaded and not root_links)
             or path_str in visited
         ):
             continue
@@ -53,9 +62,9 @@ def reload_keynote_table(doc, links=None, visited=None):
         else:
             visited.add(path_str)
             open_options = OpenOptions()
-            if not root_links:
-                link.Unload(None)
             try:
+                if link.IsLoaded:
+                    link.Unload(None)
                 linked_document = app.OpenDocumentFile(path, open_options)
                 print(
                     "Opened {} successfully. Now proceeding to open nested links".format(
@@ -107,7 +116,9 @@ keynote_file_ref = ExternalResourceReference.CreateLocalResource(
 )
 print('Start')
 unloaded_links = unload_links(doc)
+print('Links unloaded')
 reload_keynote_table(doc, unloaded_links)
+print('All files had keynote tables reloaded')
 for link in unloaded_links: link.Reload()
 
 print("POP!")

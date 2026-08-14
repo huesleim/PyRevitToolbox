@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
 from Autodesk.Revit.Exceptions import OperationCanceledException
-from Autodesk.Revit.DB import Floor, Transaction, CurveLoop
+from Autodesk.Revit.DB import BuiltInParameter, Floor, Transaction, CurveLoop
 import traceback
 
 uidoc = __revit__.ActiveUIDocument
@@ -127,7 +126,7 @@ def build_floor_groups(loop, parentship, curve_array_objects_dict):
 
     return groups
 
-def create_floors(floor, parentship, curve_array_objects_dict):
+def create_floors(floor, parentship, curve_array_objects_dict, floor_height):
     t = Transaction(doc, "Separate floor")
     t.Start()
 
@@ -148,8 +147,9 @@ def create_floors(floor, parentship, curve_array_objects_dict):
                     cl.Append(c)
                 curve_loops.append(cl)
 
-            Floor.Create(doc, curve_loops, floor_type_id, floor_level_id)
-
+            new_floor = Floor.Create(doc, curve_loops, floor_type_id, floor_level_id)
+            new_floor_height = new_floor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM)
+            new_floor_height.Set(floor_height)
         doc.Delete(floor.Id)
         t.Commit()
 
@@ -160,10 +160,11 @@ def create_floors(floor, parentship, curve_array_objects_dict):
 
 try:
     floor = pick_floor()
+    floor_height = floor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM).AsDouble()
     curve_array_objects_dict = process_floors(floor)
     polygon_relationship = compare_all_polygons(curve_array_objects_dict)
     parentship = resolve_parentship(polygon_relationship, curve_array_objects_dict)
-    create_floors(floor, parentship, curve_array_objects_dict)
+    create_floors(floor, parentship, curve_array_objects_dict, floor_height)
 
 except OperationCanceledException:
     print("Selection cancelled.")
