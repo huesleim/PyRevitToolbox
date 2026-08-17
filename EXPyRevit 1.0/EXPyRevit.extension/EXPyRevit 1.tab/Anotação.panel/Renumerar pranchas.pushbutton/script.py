@@ -7,36 +7,28 @@ import traceback
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
 
-
 def pick_sheets():
     sheets = []
-
     for element_id in uidoc.Selection.GetElementIds():
         element = doc.GetElement(element_id)
-
         if isinstance(element, ViewSheet):
             sheets.append(element)
-
     return sheets
 
 
 try:
     sheets = pick_sheets()
-
     if not sheets:
-        forms.alert("Before clicking this script, please select the sheets you want to renumber.")
-        raise Exception("No sheets selected.")
-
+        forms.alert("Antes de rodar o script, selecione as pranchas que deseja renumerar")
+        raise Exception("Nenhuma prancha selecionada")
     starting_number = forms.ask_for_string(
-        prompt="Starting number",
+        prompt="Número inicial.",
         default="0001"
     )
-
     if not starting_number:
-        raise Exception("Operation cancelled.")
+        raise Exception("Operação cancelada")
 
     
-
     starting_number_int = []
     for character in starting_number:
         if character.isdigit():
@@ -44,8 +36,8 @@ try:
 
     starting_number = "".join(starting_number_int)
     if not starting_number:
-        forms.alert("The starting number must contain at least one digit.")
-        raise Exception("Invalid sheet number.")
+        forms.alert("O número inicial deve conter ao menos um dígito.")
+        raise Exception("Número inválido")
     
     t = Transaction(doc, "Renumber sheets")
     t.Start()

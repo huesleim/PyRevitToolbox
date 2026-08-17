@@ -16,10 +16,10 @@ from Autodesk.Revit.DB import (
 )
 from pyrevit import forms
 
-
+#def check_if_reloaded():
 def unload_links(doc):
     links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
-    print("Found {} loaded links".format(len(links)))
+    print("Encontrados {} aquivos .rvt vinculados".format(len(links)))
     unloaded_links = []
     instance_filter = ElementClassFilter(RevitLinkInstance)
     for link in links:

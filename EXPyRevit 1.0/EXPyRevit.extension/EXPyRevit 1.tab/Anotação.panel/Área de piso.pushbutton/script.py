@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-
 from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
 from Autodesk.Revit.Exceptions import OperationCanceledException
 from Autodesk.Revit.DB import BuiltInCategory, Transaction
-from pyrevit import script
+from pyrevit import forms, script
 import traceback
 
 
@@ -25,13 +24,13 @@ doc = uidoc.Document
 try:
     plan = uidoc.ActiveView
     if plan.ViewType != plan.ViewType.AreaPlan:
-        print("Please switch to an Area Plan.")
+        print("Abra uma planta de área")
         script.exit()
     
     refs = uidoc.Selection.PickObjects(
         ObjectType.Element,
         FloorSelectionFilter(),
-        "Select one or more floors"
+        "Selecione um ou mais pisos"
     )
 
     t = Transaction(doc, "Create Lines")
@@ -44,7 +43,7 @@ try:
         plane = sketch.SketchPlane
 
         for profileLoop in sketch.Profile:
-            print("Creating lines")
+            print("Criando linhas de área")
 
             for curve in profileLoop:
                 doc.Create.NewAreaBoundaryLine(
@@ -55,7 +54,7 @@ try:
 
     t.Commit()
 
-    print("Na Victa é assim! :p")
-
+    forms.alert("Concluído")
+    
 except Exception:
     traceback.print_exc()

@@ -17,7 +17,7 @@ def pick_floor():
     ref = uidoc.Selection.PickObject(
         ObjectType.Element,
         FloorSelectionFilter(),
-        "Pick a floor"
+        "Escolha um piso"
     )
     return doc.GetElement(ref.ElementId)
 
@@ -167,7 +167,7 @@ try:
     create_floors(floor, parentship, curve_array_objects_dict, floor_height)
 
 except OperationCanceledException:
-    print("Selection cancelled.")
+    print("Operação cancelada")
 
 except Exception:
     traceback.print_exc()
