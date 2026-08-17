@@ -16,23 +16,29 @@ from Autodesk.Revit.DB import (
 )
 from pyrevit import forms
 
-#def check_if_reloaded():
-def unload_links(doc):
+
+def unload_links(doc, unloaded_links):
     links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
     print("Encontrados {} aquivos .rvt vinculados".format(len(links)))
-    unloaded_links = []
     instance_filter = ElementClassFilter(RevitLinkInstance)
     for link in links:
-        if link.IsNestedLink:
-            continue
+        if link in unloaded_links:
+            break
+        name = Element.Name.GetValue(link)
         has_instance = len(link.GetDependentElements(instance_filter)) > 0
-        if not has_instance:
+        if link.IsNestedLink or not has_instance:
             continue
-        print("Checking link:", Element.Name.GetValue(link))
+        print("Verificando link:", name)
         if link.IsLoaded:
             link.Unload(None)
-            print("Unloaded!")
+            print("{} descarregado!".format(name))
             unloaded_links.append(link)
+    return unloaded_links
+
+def reload_queue(unloaded_links, link):
+    if link in unloaded_links:
+        break
+    unloaded_links.append[link]
     return unloaded_links
 
 def reload_keynote_table(doc, links=None, visited=None):
@@ -98,6 +104,10 @@ def reload_keynote_table(doc, links=None, visited=None):
     except Exception:
         traceback.print_exc()
 
+def open_file(reload_queue)
+
+
+
 
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
@@ -114,6 +124,7 @@ keynote_file_ref = ExternalResourceReference.CreateLocalResource(
     model_path,
     PathType.Absolute,
 )
+
 print('Start')
 unloaded_links = unload_links(doc)
 print('Links unloaded')
@@ -122,3 +133,15 @@ print('All files had keynote tables reloaded')
 for link in unloaded_links: link.Reload()
 
 print("POP!")
+
+
+#####
+# 1. unload root's links
+# 2. store unloaded
+# 3. store all link's paths
+# 4. reload keynote table
+# 5. open link 
+# 6. 2.
+# 7. 3.
+# 8. 4.
+# 9. close file 
