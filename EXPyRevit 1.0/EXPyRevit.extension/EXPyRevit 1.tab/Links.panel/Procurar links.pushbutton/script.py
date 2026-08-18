@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from Autodesk.Revit.DB import FilteredElementCollector, RevitLinkType, ModelPathUtils, Element
 from pyrevit import forms
 import traceback, os
@@ -19,8 +20,8 @@ try:
     links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
     folder = forms.pick_folder()
     if not folder:
-        forms.alert('No folder selected.', exitscript=True)
-    print ('Selected folder: {}'.format(folder))
+        forms.alert('Nenhuma pasta selecionada.', exitscript=True)
+    print ('Pasta selecionada: {}'.format(folder))
 
     files_path = walk_folder(folder)
 
@@ -29,7 +30,7 @@ try:
             continue
         name = Element.Name.GetValue(link)
         name_lower = name.lower()
-        print ('Commencing reload for link: {}'.format(name))
+        print ('Iniciando recarregamento do vínculo: {}'.format(name))
 
         ref = link.GetExternalFileReference()
         path = ref.GetAbsolutePath()
@@ -39,13 +40,13 @@ try:
 
         full_path = files_path.get(name_lower)
         if not full_path:
-            print ('Could not find a matching file for {}. Skipping...'.format(name_lower))
+            print ('Não foi possível encontrar um arquivo correspondente para {}. Ignorando...'.format(name_lower))
             continue
 
         model_path = ModelPathUtils.ConvertUserVisiblePathToModelPath(files_path[name_lower])
 
         link.LoadFrom(model_path, None)
-        print ('Reloaded {} from {}'.format(name, full_path))
+        print ('{} recarregado a partir de {}'.format(name, full_path))
 
 
 except Exception:

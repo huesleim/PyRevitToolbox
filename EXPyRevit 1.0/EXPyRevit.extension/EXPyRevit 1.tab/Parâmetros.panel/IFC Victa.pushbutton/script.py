@@ -115,7 +115,6 @@ try:
                 secondParam.Set(second_value)
 
     t.Commit()
-    print('Na Victa é assim! :p')
 
 
 

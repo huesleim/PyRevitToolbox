@@ -17,96 +17,89 @@ from Autodesk.Revit.DB import (
 from pyrevit import forms
 
 
-def unload_links(doc, unloaded_links):
+def get_paths(link):
+    link_file_ref = link.GetExternalFileReference()
+    model_path = link_file_ref.GetAbsolutePath()
+    path_string = ModelPathUtils.ConvertModelPathToUserVisiblePath(model_path).upper()
+    return path_string, model_path
+
+
+def read_links(doc, visit_queue, visited):
+    if visited is None:
+        visited = []
     links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
-    print("Encontrados {} aquivos .rvt vinculados".format(len(links)))
+    print("[{}] Encontrados {} vinculos no total".format(doc.Title, len(links)))
     instance_filter = ElementClassFilter(RevitLinkInstance)
+    valid_count = 0
     for link in links:
-        if link in unloaded_links:
-            break
         name = Element.Name.GetValue(link)
         has_instance = len(link.GetDependentElements(instance_filter)) > 0
-        if link.IsNestedLink or not has_instance:
+        if link.IsNestedLink:
+            print("  Ignorando '{}' (link aninhado)".format(name))
             continue
-        print("Verificando link:", name)
+        if not has_instance:
+            print("  Ignorando '{}' (sem instancia)".format(name))
+            continue
+        path, model_path = get_paths(link)
+        if path in visit_queue.keys() or path in visited:
+            print("  Ignorando '{}' (ja na fila ou processado)".format(name))
+            continue
+        valid_count += 1
+        visit_queue[path] = {}
+        visit_queue[path]["link"] = link
+        visit_queue[path]["link_name"] = name
+        visit_queue[path]["model_path"] = model_path
+    print("[{}] {} vinculos validos adicionados a fila".format(doc.Title, valid_count))
+    return visit_queue
+
+
+def unload_links(doc, unloaded, visited=None):
+    visit_queue = {}
+    visit_queue = read_links(doc, visit_queue, visited)
+    for path, value in visit_queue.items():
+        link = value["link"]
         if link.IsLoaded:
             link.Unload(None)
-            print("{} descarregado!".format(name))
-            unloaded_links.append(link)
-    return unloaded_links
+            unloaded.append(link)
+            print("[{}] '{}' descarregado".format(doc.Title, value["link_name"]))
+    return unloaded, visit_queue
 
-def reload_queue(unloaded_links, link):
-    if link in unloaded_links:
-        break
-    unloaded_links.append[link]
-    return unloaded_links
 
-def reload_keynote_table(doc, links=None, visited=None):
-    if visited is None:
-        visited = set()
-
-    root_links = links is not None
-
-    if not root_links:
-        links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
-
-    if len(links) == 0:
-        print("Last link in branch! Reloading keynote on this file")
-
-    for link in links:
-        link_name = Element.Name.GetValue(link)
-        link_file_ref = link.GetExternalFileReference()
-        path = link_file_ref.GetAbsolutePath()
-        path_str = ModelPathUtils.ConvertModelPathToUserVisiblePath(path).lower()
-
-        if (
-            link.IsNestedLink
-            or path_str in visited
-        ):
-            continue
-
-        else:
-            visited.add(path_str)
-            open_options = OpenOptions()
-            try:
-                if link.IsLoaded:
-                    link.Unload(None)
-                linked_document = app.OpenDocumentFile(path, open_options)
-                print(
-                    "Opened {} successfully. Now proceeding to open nested links".format(
-                        link_name
-                    )
-                )
-            except Exception:
-                traceback.print_exc()
-                print("Failed to open {}. Moving to next link".format(link_name))
-                link.Reload()
-                continue
-
-            try:
-                reload_keynote_table(linked_document, visited=visited)
-
-            finally:
-                linked_document.Close()
-                if not root_links: 
-                    link.Reload()
-
+def reload_keynote_table(doc, keynote_file_ref):
     try:
-        print("DOC:", doc.PathName)
-        print("TITLE:", doc.Title)
-        print("IS LINKED:", doc.IsLinked)
-        t = Transaction(doc, "Reload keynote table on current file")
+        t = Transaction(doc, "Recarregando tabela de nota-chave no arquivo atual")
         t.Start()
         keynote_table = KeynoteTable.GetKeynoteTable(doc)
         keynote_table.LoadFrom(keynote_file_ref, None)
         t.Commit()
+        print("[{}] Tabela de nota-chave recarregada".format(doc.Title))
 
     except Exception:
         traceback.print_exc()
 
-def open_file(reload_queue)
+
+def visit_link(app, value, visit_queue, visited, keynote_file_ref):
+    open_options = OpenOptions()
+    model_path = value["model_path"]
+    try:
+        linked_document = app.OpenDocumentFile(model_path, open_options)
+        print("Abrindo: {}".format(linked_document.Title))
+        visit_queue = read_links(linked_document, visit_queue, visited)
+        reload_keynote_table(linked_document, keynote_file_ref)
+        print("Fechando: {}".format(linked_document.Title))
+        linked_document.Close()
+
+    except Exception:
+        traceback.print_exc()
+
+    return visit_queue
 
 
+def proccess_queue(visit_queue, visited):
+    while visit_queue:
+        path, value = visit_queue.popitem()
+        visit_queue = visit_link(app, value, visit_queue, visited, keynote_file_ref)
+        visited.append(path)
 
 
 uidoc = __revit__.ActiveUIDocument
@@ -125,23 +118,17 @@ keynote_file_ref = ExternalResourceReference.CreateLocalResource(
     PathType.Absolute,
 )
 
-print('Start')
-unloaded_links = unload_links(doc)
-print('Links unloaded')
-reload_keynote_table(doc, unloaded_links)
-print('All files had keynote tables reloaded')
-for link in unloaded_links: link.Reload()
+print("Start")
 
-print("POP!")
-
-
-#####
-# 1. unload root's links
-# 2. store unloaded
-# 3. store all link's paths
-# 4. reload keynote table
-# 5. open link 
-# 6. 2.
-# 7. 3.
-# 8. 4.
-# 9. close file 
+visit_queue = {}
+unloaded = []
+visited = []
+try:
+    unloaded, visit_queue = unload_links(doc, unloaded, visited)
+    reload_keynote_table(doc, keynote_file_ref)
+    proccess_queue(visit_queue, visited)
+    for link in unloaded:
+        link.Reload()
+    print("POP!")
+except Exception:
+    traceback.print_exc()
