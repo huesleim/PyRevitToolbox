@@ -101,6 +101,7 @@ def resolve_reference(tags_data, helper_view):
             closest_face = min(intersections, key=lambda intersection: intersection.Proximity)
             reference = closest_face.GetReference()
             tag_data["reference"] = reference
+            
             ####review this
             tag_data["reference_point"] = reference.GlobalPoint
 
