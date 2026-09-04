@@ -20,14 +20,13 @@ def find_ifc_value(category, text):
         int(BuiltInCategory.OST_Ceilings): "IfcCovering",
         int(BuiltInCategory.OST_Stairs): "IfcStair",
         int(BuiltInCategory.OST_Windows): "IfcWindow",
-        int(BuiltInCategory.OST_SpecialityEquipment): ("IfcDoor", "TRAPDOOR"),
         int(BuiltInCategory.OST_StairsRailing): "IfcRailing",
         int(BuiltInCategory.OST_Railings): "IfcRailing",
         int(BuiltInCategory.OST_Casework): ("IfcFurnishingElement", "USERDEFINED"),
     }
     
     if category == int(BuiltInCategory.OST_MechanicalEquipment):
-        if 'elevador' in text in text:
+        if 'elevador' in text:
             return 'IfcSpace'
     
     if category == int(BuiltInCategory.OST_SpecialityEquipment):
