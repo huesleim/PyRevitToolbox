@@ -1,27 +1,16 @@
+# -*- coding: utf-8 -*-
 import traceback
 from datetime import datetime
 
 from Autodesk.Revit.DB import (
-    BuiltInParameter,
     Element,
     ElementClassFilter,
-    ElementId,
-    ExternalResourceReference,
-    ExternalResourceTypes,
     FilteredElementCollector,
-    KeynoteTable,
     ModelPathUtils,
     OpenOptions,
-    PathType,
     RevitLinkInstance,
     RevitLinkType,
-    ScheduleFilter,
-    ScheduleFilterType,
-    Transaction,
-    ViewSchedule,
 )
-from Autodesk.Revit.Exceptions import OperationCanceledException
-from pyrevit import forms
 
 
 def log(message):
@@ -88,37 +77,36 @@ def unload_links(doc, unloaded, visited=None):
     return unloaded, visit_queue
 
 
-def visit_link(
-    app, value, visit_queue, visited, main_function
-):
+def visit_link(app, value, visit_queue, visited, main_function, recursive=True):
+
     open_options = OpenOptions()
     model_path = value["model_path"]
+    linked_document = None
     try:
         linked_document = app.OpenDocumentFile(model_path, open_options)
         log("Abrindo: {}".format(linked_document.Title))
 
-        visit_queue = read_links(linked_document, visit_queue, visited)
+        if recursive:
+            visit_queue = read_links(linked_document, visit_queue, visited)
 
-        main_function(linked_document)
-
-        log("Fechando: {}".format(linked_document.Title))
+        main_function(linked_document, value)
 
     except Exception:
-        print_error("Falha ao processar link: {}".format(model_path))
+        print_error("Falha ao processar link: {}".format(value.get("link_name")))
 
     finally:
-        linked_document.Close()
+        if linked_document is not None:
+            log("Fechando: {}".format(linked_document.Title))
+            linked_document.Close()
 
     return visit_queue
 
 
-def proccess_queue(
-    app, visit_queue, visited, main_function
-):
+def proccess_queue(app, visit_queue, visited, main_function, recursive=True):
     while visit_queue:
         path, value = visit_queue.popitem()
         visit_queue = visit_link(
-            app, value, visit_queue, visited, main_function=
+            app, value, visit_queue, visited, main_function, recursive
         )
         visited.append(path)
 
@@ -141,6 +129,16 @@ def print_summary(update_log, skipped_log):
         log("Elementos nao modificados: {}".format(", ".join(skipped_keys)))
     log("==================")
 
-def reload_links(visited):
-    for link in visited:
-        link.Reload()
+
+def reload_links(links):
+    """Recarrega uma lista de RevitLinkType (ex.: a lista 'unloaded')."""
+    for link in links:
+        name = Element.Name.GetValue(link)
+        try:
+            link.Reload()
+            log("'{}' recarregado".format(name))
+        except Exception:
+            print_error("Falha ao recarregar '{}'".format(name))
+
+
+# Documento elaborado com auxílio do programa de incentivo à IA EXP Brasil
