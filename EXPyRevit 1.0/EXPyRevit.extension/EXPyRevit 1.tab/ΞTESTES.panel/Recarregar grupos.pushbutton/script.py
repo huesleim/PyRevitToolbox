@@ -78,9 +78,9 @@ selected_groups = [name_to_type[name] for name in selected_names]
 
 t = Transaction(doc, "Recarregar grupos selecionados")
 try:
-    # options = t.GetFailureHandlingOptions()
-    # options.SetFailuresPreprocessor(SwallowLinkedImportWarning())
-    # t.SetFailureHandlingOptions(options)
+    options = t.GetFailureHandlingOptions()
+    options.SetFailuresPreprocessor(SwallowLinkedImportWarning())
+    t.SetFailureHandlingOptions(options)
 
     t.Start()
     reload_groups(selected_groups)
