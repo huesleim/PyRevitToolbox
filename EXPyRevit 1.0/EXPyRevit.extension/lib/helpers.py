@@ -140,7 +140,7 @@ def visit_file(app, entry, main_function, discover=None):
         if discover:
             new_entries.update(discover(opened_file))
 
-        main_function(opened_file, entry)
+        main_function(opened_file)
 
     except Exception:
         print_error("Falha ao processar link: {}".format(entry.get("name")))
@@ -179,6 +179,9 @@ def reload_links(links):
         except Exception:
             print_error("Falha ao recarregar '{}'".format(name))
 
+
+### USER PROMPTING ###
+
 def pick_elements(doc, element_class, prompt):
     elements = FilteredElementCollector(doc).OfClass(element_class).ToElements()
     name_to_elem = {Element.Name.GetValue(e): e for e in elements}
@@ -190,3 +193,5 @@ def pick_elements(doc, element_class, prompt):
     if not selected_elements:
         return []
     return [name_to_elem[name] for name in selected_elements]
+
+def export_dwg
