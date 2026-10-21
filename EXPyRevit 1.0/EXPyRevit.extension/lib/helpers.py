@@ -193,5 +193,3 @@ def pick_elements(doc, element_class, prompt):
     if not selected_elements:
         return []
     return [name_to_elem[name] for name in selected_elements]
-
-def export_dwg
