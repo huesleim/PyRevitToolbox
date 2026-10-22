@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 
 # ---------------------------------------------------------------------------- #
@@ -6,10 +5,14 @@
 # ---------------------------------------------------------------------------- #
 
 import os
+
+import re
+
 import clr
 import helpers
 import System
-from pyrevit import forms, script
+import traceback
+
 from Autodesk.Revit.DB import (
     BuiltInCategory,
     BuiltInParameter,
@@ -17,19 +20,20 @@ from Autodesk.Revit.DB import (
     DWGExportOptions,
     Element,
     ElementId,
-    FilteredElementCollector,
-    PDFExportQualityType,
-    RasterQualityType,
     ExportPaperFormat,
+    FilteredElementCollector,
     PageOrientationType,
     PaperPlacementType,
     PDFExportOptions,
+    PDFExportQualityType,
+    RasterQualityType,
     TableCellCombinedParameterData,
+    ViewSheet,
     ZoomType,
-    ViewSheet
 )
 
-
+from System.Collections.Generic import List
+from pyrevit import forms, script
 
 # ---------------------------------------------------------------------------- #
 #                                   FUNCTIONS                                  #
@@ -46,11 +50,25 @@ ENUM_COMBOS = {
     "cmb_raster_quality": ("RasterQuality", RasterQualityType),
 }
 
+ENUM_DEFAULTS = {
+    "cmb_paper_format": "ISO_A1",
+    "cmb_orientation": "Landscape",
+    "cmb_placement": "Center",
+    "cmb_zoom_type": "Zoom",
+    "cmb_color_depth": "Color",
+    "cmb_export_quality": "DPI72",
+    "cmb_raster_quality": "Presentation",
+}
+
 NAMING_PARTS = [
-    (BuiltInParameter.SHEET_NUMBER, "", ""),
-    (BuiltInParameter.SHEET_NAME, "-", ""),
-    (BuiltInParameter.SHEET_CURRENT_REVISION, "-", ""),
+    ("project", "Disciplina (Sigla)", "", ""),
+    ("project", "Número do projeto", "-", ""),
+    # ("project", "Etapa", "-", ""),
+    ("sheet", BuiltInParameter.SHEET_NUMBER, "-", ""),
+    ("sheet", BuiltInParameter.SHEET_NAME, "-", ""),
+    ("sheet", BuiltInParameter.SHEET_CURRENT_REVISION, "-", ""),
 ]
+
 
 class ExportWindow(forms.WPFWindow):
     def __init__(self):
@@ -61,8 +79,10 @@ class ExportWindow(forms.WPFWindow):
         # fill the enum dropdowns
         for combo_name, (_, enum_type) in ENUM_COMBOS.items():
             combo = getattr(self, combo_name)
-            combo.ItemsSource = list(System.Enum.GetNames(clr.GetClrType(enum_type)))
-            combo.SelectedIndex = 0
+            names = list(System.Enum.GetNames(clr.GetClrType(enum_type)))
+            combo.ItemsSource = names
+            default = ENUM_DEFAULTS.get(combo_name)
+            combo.SelectedIndex = names.index(default) if default in names else 0
 
         self.on_combine_changed(None, None)
         self.on_placement_changed(None, None)
@@ -107,12 +127,14 @@ class ExportWindow(forms.WPFWindow):
             opts.FileName = self.txt_filename.Text
         else:
             rule = build_naming_rule(NAMING_PARTS)
+            if rule is None:
+                return
             if not PDFExportOptions.IsValidNamingRule(rule):
                 forms.alert("Regra de nomenclatura inválida!")
                 return
             opts.SetNamingRule(rule)
-            
-        opts.OriginOffsetX = offset_x / 304.8  # mm -> feet
+
+        opts.OriginOffsetX = offset_x / 304.8  # mm -> ft
         opts.OriginOffsetY = offset_y / 304.8
         opts.ZoomPercentage = zoom
         opts.AlwaysUseRaster = bool(self.chk_always_raster.IsChecked)
@@ -135,16 +157,43 @@ class ExportWindow(forms.WPFWindow):
         self.result = opts
         self.Close()
 
+
+def build_name_string(parts, sheet):
+    pieces = []
+    for source, key, prefix, suffix in parts:
+        param = (
+            doc.ProjectInformation.LookupParameter(key)
+            if source == "project"
+            else sheet.get_Parameter(key)
+        )
+        if param is None:
+            forms.alert("Parâmetro não encontrado: {}".format(key))
+            return None
+        value = param.AsString() or param.AsValueString()
+        if value:  # empty values are skipped, with their prefix and suffix
+            pieces.append((prefix if pieces else "") + value + suffix)
+    return re.sub(r'[\\/:*?"<>|]', "_", "".join(pieces))
+
+
 def build_naming_rule(parts):
     rule = []
-    for bip, prefix, suffix in parts:
+    for source, key, prefix, suffix in parts:
+        if source == "project":
+            param = doc.ProjectInformation.LookupParameter(key)
+            if param is None:
+                forms.alert("Parâmetro de projeto não encontrado: {}".format(key))
+                return None
+            category, param_id = BuiltInCategory.OST_ProjectInformation, param.Id
+        else:
+            category, param_id = BuiltInCategory.OST_Sheets, ElementId(key)
         item = TableCellCombinedParameterData.Create()
-        item.CategoryId = ElementId(BuiltInCategory.OST_Sheets)
-        item.ParamId = ElementId(bip)
+        item.CategoryId = ElementId(category)
+        item.ParamId = param_id
         item.Prefix = prefix
         item.Suffix = suffix
         rule.append(item)
     return rule
+
 
 # ---------------------------------------------------------------------------- #
 #                                   VARIABLES                                  #
@@ -157,18 +206,31 @@ XAML_PATH = os.path.join(os.path.dirname(__file__), "export_window.xaml")
 
 
 target_sheets = FilteredElementCollector(doc).OfClass(ViewSheet).ToElements()
-name_to_elem = {"{} - {}".format(e.SheetNumber, Element.Name.GetValue(e)): e for e in target_sheets}
+name_to_elem = {
+    "{} - {}".format(e.SheetNumber, Element.Name.GetValue(e)): e for e in target_sheets
+}
 selected_elements = forms.SelectFromList.show(
-    list(name_to_elem.keys()),
+    sorted(name_to_elem.keys()),
     title="Escolha as pranchas a serem exportadas",
     multiselect=True,
 )
 if not selected_elements:
     forms.alert("Nenhuma vista selecionada", exitscript=True)
 
-view_ids = [name_to_elem[name].Id for name in selected_elements]
 
-print (view_ids)
+result = forms.CommandSwitchWindow.show(
+    ["Exportar"], 
+    switches=["PDF", "DWG"], 
+    message="Selecione os formatos a exportar",
+)
+if not result or not result[0]:
+    script.exit()
+
+selection, switches = result
+export_pdf = switches["PDF"]
+export_dwg = switches["DWG"]
+
+view_ids = List[ElementId]([name_to_elem[name].Id for name in selected_elements])
 
 window = ExportWindow()
 window.show_dialog()
@@ -176,14 +238,35 @@ if window.result is None:
     script.exit()
 pdf_settings = window.result
 
+dwg_settings = DWGExportOptions.GetPredefinedOptions(doc, "DWG")
+if dwg_settings is None:
+    forms.alert(
+        "Configuração de exportação 'DWG' não encontrada no projeto.", exitscript=True
+    )
+
+
 
 # ---------------------------------------------------------------------------- #
 #                                     MAIN                                     #
 # ---------------------------------------------------------------------------- #
+try:
+    if export_pdf:
+        doc.Export(window.folder, view_ids, pdf_settings)
 
-print ("Iniciando exportação")
+    if export_dwg:
+        sheets = [name_to_elem[name] for name in selected_elements]
+        for sheet in sheets:
+            dwg_name = build_name_string(NAMING_PARTS, sheet)
+            if dwg_name is None:
+                script.exit()
+            ok = doc.Export(
+                window.folder, dwg_name, List[ElementId]([sheet.Id]), dwg_settings
+            )
+            if not ok:
+                print("Falha ao exportar DWG: {}".format(dwg_name))
 
-doc.Export(window.folder, view_ids, pdf_settings)
+except Exception:
+    traceback.print_exc()
 
 forms.alert("Exportação concluída!")
-os.open(window.folder)
+os.startfile(window.folder)
