@@ -56,7 +56,7 @@ ENUM_DEFAULTS = {
     "cmb_placement": "Center",
     "cmb_zoom_type": "Zoom",
     "cmb_color_depth": "Color",
-    "cmb_export_quality": "DPI72",
+    "cmb_export_quality": "DPI4000",
     "cmb_raster_quality": "Presentation",
 }
 
