@@ -61,7 +61,7 @@ ENUM_DEFAULTS = {
 }
 
 NAMING_PARTS = [
-    ("project", "Disciplina (Sigla)", "", ""),
+   # ("project", "Disciplina (Sigla)", "", ""),
     ("project", "Número do projeto", "-", ""),
     # ("project", "Etapa", "-", ""),
     ("sheet", BuiltInParameter.SHEET_NUMBER, "-", ""),
@@ -241,7 +241,7 @@ pdf_settings = window.result
 dwg_settings = DWGExportOptions.GetPredefinedOptions(doc, "DWG")
 if dwg_settings is None:
     forms.alert(
-        "Configuração de exportação 'DWG' não encontrada no projeto.", exitscript=True
+        "Configuração de exportação 'DWG' não encontrada no projeto.", exitscript=False
     )
 
 

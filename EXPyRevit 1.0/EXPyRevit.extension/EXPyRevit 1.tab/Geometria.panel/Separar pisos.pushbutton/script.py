@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
 from Autodesk.Revit.Exceptions import OperationCanceledException
 from Autodesk.Revit.DB import BuiltInParameter, Floor, Transaction, CurveLoop
