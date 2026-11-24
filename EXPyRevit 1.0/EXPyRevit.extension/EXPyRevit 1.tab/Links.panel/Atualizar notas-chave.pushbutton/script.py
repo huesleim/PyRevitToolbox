@@ -1,91 +1,23 @@
-import traceback
-from datetime import datetime
-
+# -*- coding: utf-8 -*-
 from Autodesk.Revit.DB import (
     BuiltInParameter,
-    Element,
-    ElementClassFilter,
     ElementId,
     ExternalResourceReference,
     ExternalResourceTypes,
     FilteredElementCollector,
     KeynoteTable,
     ModelPathUtils,
-    OpenOptions,
     PathType,
-    RevitLinkInstance,
-    RevitLinkType,
     ScheduleFilter,
     ScheduleFilterType,
     Transaction,
     ViewSchedule,
 )
 from Autodesk.Revit.Exceptions import OperationCanceledException
-from pyrevit import forms
+from pyrevit import forms, script
 
-
-def log(message):
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    print("[{}] {}".format(timestamp, message))
-
-
-def print_error(context):
-    log("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-    log("ERRO: {}".format(context))
-    traceback.print_exc()
-    log("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-
-
-def get_paths(link):
-    link_file_ref = link.GetExternalFileReference()
-    model_path = link_file_ref.GetAbsolutePath()
-    path_string = ModelPathUtils.ConvertModelPathToUserVisiblePath(model_path).upper()
-    return path_string, model_path
-
-
-def read_links(doc, visit_queue, visited):
-    if visited is None:
-        visited = []
-    links = FilteredElementCollector(doc).OfClass(RevitLinkType).ToElements()
-    log("[{}] Encontrados {} vinculos no total".format(doc.Title, len(links)))
-    instance_filter = ElementClassFilter(RevitLinkInstance)
-    valid_count = 0
-    for link in links:
-        name = Element.Name.GetValue(link)
-        has_instance = len(link.GetDependentElements(instance_filter)) > 0
-        if link.IsNestedLink:
-            log("  [{}] Ignorando '{}' (link aninhado)".format(doc.Title, name))
-            continue
-        if not has_instance:
-            log("  [{}] Ignorando '{}' (sem instancia)".format(doc.Title, name))
-            continue
-        path, model_path = get_paths(link)
-        if path in visit_queue.keys() or path in visited:
-            log(
-                "  [{}] Ignorando '{}' (ja na fila ou processado)".format(
-                    doc.Title, name
-                )
-            )
-            continue
-        valid_count += 1
-        visit_queue[path] = {}
-        visit_queue[path]["link"] = link
-        visit_queue[path]["link_name"] = name
-        visit_queue[path]["model_path"] = model_path
-    log("[{}] {} vinculos validos adicionados a fila".format(doc.Title, valid_count))
-    return visit_queue
-
-
-def unload_links(doc, unloaded, visited=None):
-    visit_queue = {}
-    visit_queue = read_links(doc, visit_queue, visited)
-    for path, value in visit_queue.items():
-        link = value["link"]
-        if link.IsLoaded:
-            link.Unload(None)
-            unloaded.append(link)
-            log("[{}] '{}' descarregado".format(doc.Title, value["link_name"]))
-    return unloaded, visit_queue
+import helpers
+from helpers import log, print_error
 
 
 def reload_keynote_table(doc, keynote_file_ref):
@@ -200,66 +132,25 @@ def update_descriptions(doc, keynote_lookup, update_log, skipped_log):
 
     except OperationCanceledException:
         log("[{}] Operacao cancelada, nenhuma alteracao foi salva".format(doc.Title))
-        t.Rollback()
+        t.RollBack()
 
     except Exception:
         print_error(
             "Falha ao criar tabela/atualizar descricoes em {}".format(doc.Title)
         )
-        t.Rollback()
-
-def visit_link(
-    app, value, visit_queue, visited, keynote_file_ref, update_log, skipped_log
-):
-    open_options = OpenOptions()
-    model_path = value["model_path"]
-    try:
-        linked_document = app.OpenDocumentFile(model_path, open_options)
-        log("Abrindo: {}".format(linked_document.Title))
-
-        visit_queue = read_links(linked_document, visit_queue, visited)
-
-        keynote_table = reload_keynote_table(linked_document, keynote_file_ref)
-        keynote_lookup = build_keynote_lookup(keynote_table)
-        update_descriptions(linked_document, keynote_lookup, update_log, skipped_log)
-
-        log("Fechando: {}".format(linked_document.Title))
-        linked_document.Close()
-
-    except Exception:
-        print_error("Falha ao processar link: {}".format(model_path))
-
-    return visit_queue
+        t.RollBack()
 
 
-def proccess_queue(
-    app, visit_queue, visited, keynote_file_ref, update_log, skipped_log
-):
-    while visit_queue:
-        path, value = visit_queue.popitem()
-        visit_queue = visit_link(
-            app, value, visit_queue, visited, keynote_file_ref, update_log, skipped_log
-        )
-        visited.append(path)
+def discover_links(opened_doc):
+    valid = helpers.collect_valid_links(opened_doc)
+    log("[{}] {} vinculos validos encontrados".format(opened_doc.Title, len(valid)))
+    return helpers.entries_from_links(valid)
 
 
-def print_summary(update_log, skipped_log):
-    log("\n===== RESUMO =====")
-    if update_log:
-        for key, files in update_log.items():
-            unique_files = sorted(set(files))
-            log(
-                "Descricao do elemento {} atualizada nos arquivos: {}".format(
-                    key, ", ".join(unique_files)
-                )
-            )
-    else:
-        log("Nenhum elemento foi atualizado.")
-
-    if skipped_log:
-        skipped_keys = sorted(skipped_log.keys())
-        log("Elementos nao modificados: {}".format(", ".join(skipped_keys)))
-    log("==================")
+def process_document(target_doc):
+    keynote_table = reload_keynote_table(target_doc, keynote_file_ref)
+    keynote_lookup = build_keynote_lookup(keynote_table)
+    update_descriptions(target_doc, keynote_lookup, update_log, skipped_log)
 
 
 uidoc = __revit__.ActiveUIDocument
@@ -272,6 +163,15 @@ keynote_file = forms.pick_file(
 if not keynote_file:
     forms.alert("Nenhum arquivo de tabela de nota-chave selecionado.", exitscript=True)
 
+if not forms.alert(
+    "A tabela de nota-chave sera recarregada e as descricoes atualizadas neste "
+    "arquivo e em todos os vinculos (que serao abertos, salvos e fechados).\n\n"
+    "Prosseguir?",
+    yes=True,
+    no=True,
+):
+    script.exit()
+
 model_path = ModelPathUtils.ConvertUserVisiblePathToModelPath(keynote_file)
 keynote_file_ref = ExternalResourceReference.CreateLocalResource(
     doc,
@@ -282,23 +182,23 @@ keynote_file_ref = ExternalResourceReference.CreateLocalResource(
 
 log("Iniciando")
 
-visit_queue = {}
-unloaded = []
-visited = [model_path]
 update_log = {}
 skipped_log = {}
+unloaded = []
 try:
-    unloaded, visit_queue = unload_links(doc, unloaded, visited)
+    queue = helpers.VisitQueue()
+    queue.mark_visited(helpers.doc_path_key(doc))
 
-    keynote_table = reload_keynote_table(doc, keynote_file_ref)
-    keynote_lookup = build_keynote_lookup(keynote_table)
-    update_descriptions(doc, keynote_lookup, update_log, skipped_log)
+    valid_links = helpers.collect_valid_links(doc)
+    unloaded = helpers.unload_links(valid_links)
+    queue.add(helpers.entries_from_links(valid_links))
 
-    proccess_queue(app, visit_queue, visited, keynote_file_ref, update_log, skipped_log)
+    process_document(doc)
 
-    for link in unloaded:
-        link.Reload()
+    helpers.process_queue(app, queue, process_document, discover=discover_links)
 
-    print_summary(update_log, skipped_log)
+    helpers.print_summary(update_log, skipped_log)
 except Exception:
     print_error("Falha geral no script")
+finally:
+    helpers.reload_links(unloaded)

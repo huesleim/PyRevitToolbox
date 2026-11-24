@@ -11,7 +11,6 @@ import re
 import clr
 import helpers
 import System
-import traceback
 
 from Autodesk.Revit.DB import (
     BuiltInCategory,
@@ -51,7 +50,7 @@ ENUM_COMBOS = {
 }
 
 ENUM_DEFAULTS = {
-    "cmb_paper_format": "ISO_A1",
+    "cmb_paper_format": "Default",
     "cmb_orientation": "Landscape",
     "cmb_placement": "Center",
     "cmb_zoom_type": "Zoom",
@@ -59,6 +58,14 @@ ENUM_DEFAULTS = {
     "cmb_export_quality": "DPI4000",
     "cmb_raster_quality": "Presentation",
 }
+
+# enum name -> label shown in the dropdown
+DISPLAY_NAMES = {
+    "cmb_paper_format": {"Default": "Usar tamanho da prancha"},
+}
+
+# fields the API ignores when the paper format is "Use sheet size"
+SHEET_SIZE_LOCKED = ("cmb_orientation", "cmb_placement", "cmb_zoom_type")
 
 NAMING_PARTS = [
    # ("project", "Disciplina (Sigla)", "", ""),
@@ -76,29 +83,58 @@ class ExportWindow(forms.WPFWindow):
         self.result = None  # PDFExportOptions, set on confirm
         self.folder = None  # destination folder, set on confirm
 
+        self._ready = False
+
         # fill the enum dropdowns
         for combo_name, (_, enum_type) in ENUM_COMBOS.items():
             combo = getattr(self, combo_name)
             names = list(System.Enum.GetNames(clr.GetClrType(enum_type)))
-            combo.ItemsSource = names
+            labels = DISPLAY_NAMES.get(combo_name, {})
+            combo.ItemsSource = [labels.get(n, n) for n in names]
             default = ENUM_DEFAULTS.get(combo_name)
             combo.SelectedIndex = names.index(default) if default in names else 0
 
+        self._ready = True
         self.on_combine_changed(None, None)
-        self.on_placement_changed(None, None)
-        self.on_zoom_type_changed(None, None)
+        self.update_page_fields()
+
+    def enum_name(self, combo_name):
+        """Selected enum member name (undoes the DISPLAY_NAMES label)."""
+        selected = getattr(self, combo_name).SelectedItem
+        for name, label in DISPLAY_NAMES.get(combo_name, {}).items():
+            if selected == label:
+                return name
+        return selected
 
     # enable/disable dependent fields
     def on_combine_changed(self, sender, args):
         self.txt_filename.IsEnabled = bool(self.chk_combine.IsChecked)
 
+    def on_paper_format_changed(self, sender, args):
+        self.update_page_fields()
+
     def on_placement_changed(self, sender, args):
+        self.update_page_fields()
+
+    def on_zoom_type_changed(self, sender, args):
+        self.update_page_fields()
+
+    def update_page_fields(self):
+        if not self._ready:
+            return
+        use_sheet_size = self.enum_name("cmb_paper_format") == "Default"
+        if use_sheet_size and self.cmb_placement.SelectedItem != "Center":
+            # Revit requires Center placement with "Use sheet size"
+            self.cmb_placement.SelectedItem = "Center"
+        for combo_name in SHEET_SIZE_LOCKED:
+            getattr(self, combo_name).IsEnabled = not use_sheet_size
+
         offset = self.cmb_placement.SelectedItem not in (None, "Center")
         self.txt_offset_x.IsEnabled = offset
         self.txt_offset_y.IsEnabled = offset
-
-    def on_zoom_type_changed(self, sender, args):
-        self.txt_zoom.IsEnabled = self.cmb_zoom_type.SelectedItem == "Zoom"
+        self.txt_zoom.IsEnabled = (
+            not use_sheet_size and self.cmb_zoom_type.SelectedItem == "Zoom"
+        )
 
     # buttons
     def on_browse(self, sender, args):
@@ -150,8 +186,7 @@ class ExportWindow(forms.WPFWindow):
 
         # enums: convert the selected name back to the enum member
         for combo_name, (prop, enum_type) in ENUM_COMBOS.items():
-            selected = getattr(self, combo_name).SelectedItem
-            setattr(opts, prop, getattr(enum_type, selected))
+            setattr(opts, prop, getattr(enum_type, self.enum_name(combo_name)))
 
         self.folder = self.txt_folder.Text
         self.result = opts
@@ -263,10 +298,10 @@ try:
                 window.folder, dwg_name, List[ElementId]([sheet.Id]), dwg_settings
             )
             if not ok:
-                print("Falha ao exportar DWG: {}".format(dwg_name))
+                helpers.log("Falha ao exportar DWG: {}".format(dwg_name))
 
 except Exception:
-    traceback.print_exc()
+    helpers.print_error("Falha na exportação")
 
 forms.alert("Exportação concluída!")
 os.startfile(window.folder)

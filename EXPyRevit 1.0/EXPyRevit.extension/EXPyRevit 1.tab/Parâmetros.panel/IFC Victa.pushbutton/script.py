@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from Autodesk.Revit.Exceptions import OperationCanceledException
 from Autodesk.Revit.DB import BuiltInCategory, Transaction, BuiltInParameter, SectionType, FilteredElementCollector, ElementId, ScheduleFieldType
-import traceback
+import helpers
 
 # Select elements and declare variables #
 uidoc = __revit__.ActiveUIDocument
@@ -119,8 +119,8 @@ try:
 
 except OperationCanceledException:
     print('Selection cancelled.')
-    t.Rollback()
+    t.RollBack()
 
 except Exception:
-    traceback.print_exc()
+    helpers.print_error("Falha no preenchimento IFC")
     t.RollBack()

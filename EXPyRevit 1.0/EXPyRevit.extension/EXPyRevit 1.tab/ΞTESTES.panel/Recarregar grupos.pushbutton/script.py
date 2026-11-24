@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import traceback
 from System import Guid
 from pyrevit import forms
 from Autodesk.Revit.DB import (
@@ -12,6 +11,8 @@ from Autodesk.Revit.DB import (
     ModelPathUtils,
     Transaction,
 )
+
+import helpers
 
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
@@ -62,19 +63,12 @@ def reload_groups(selected_groups):
             print("Falha ao recarregar o grupo '{}': {}".format(name, str(e)))
 
 
-group_types = FilteredElementCollector(doc).OfClass(GroupType).ToElements()
-name_to_type = {Element.Name.GetValue(g): g for g in group_types}
-
-selected_names = forms.SelectFromList.show(
-    list(name_to_type.keys()),
-    title="Selecione os grupos a serem recarregados",
-    multiselect=True,
+selected_groups = helpers.pick_elements(
+    doc, GroupType, "Selecione os grupos a serem recarregados"
 )
 
-if not selected_names:
+if not selected_groups:
     forms.alert("Nenhum grupo selecionado. O script será encerrado.", exitscript=True)
-
-selected_groups = [name_to_type[name] for name in selected_names]
 
 t = Transaction(doc, "Recarregar grupos selecionados")
 try:
@@ -88,4 +82,4 @@ try:
 
 except Exception:
     t.RollBack()
-    traceback.print_exc()
+    helpers.print_error("Falha ao recarregar grupos")

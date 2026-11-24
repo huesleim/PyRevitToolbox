@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import traceback
+import helpers
 from pyrevit import forms
 from Autodesk.Revit.DB import (
     BuiltInCategory,
@@ -139,4 +139,4 @@ try:
 
 except Exception:
     t.RollBack()
-    traceback.print_exc()
+    helpers.print_error("Falha ao corrigir tags")

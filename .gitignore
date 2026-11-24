@@ -2,5 +2,14 @@ backup/
 output/
 obsolete/
 test files/
+teste_export/
 icon_assets/
-dwg_merger/
+
+# dwg_merger: keep the source, ignore build output and test files
+dwg_merger/build/
+dwg_merger/dist/
+dwg_merger/test_files/
+
+# Python cache
+__pycache__/
+*.pyc

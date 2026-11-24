@@ -3,7 +3,7 @@
 from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
 from Autodesk.Revit.Exceptions import OperationCanceledException
 from Autodesk.Revit.DB import BuiltInParameter, Floor, Transaction, CurveLoop
-import traceback
+import helpers
 
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
@@ -157,7 +157,7 @@ def create_floors(floor, parentship, curve_array_objects_dict, floor_height):
 
     except Exception:
         t.RollBack()
-        traceback.print_exc()
+        helpers.print_error("Falha ao separar piso")
 
 
 try:
@@ -172,4 +172,4 @@ except OperationCanceledException:
     print("Operação cancelada")
 
 except Exception:
-    traceback.print_exc()
+    helpers.print_error("Falha geral no script")

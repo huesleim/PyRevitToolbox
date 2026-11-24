@@ -28,22 +28,24 @@ def print_error(context):
     traceback.print_exc()
     log("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 
-def print_summary(update_log, skipped_log):
+def print_summary(
+    update_log,
+    skipped_log,
+    updated_msg="Descricao do elemento {} atualizada nos arquivos: {}",
+    empty_msg="Nenhum elemento foi atualizado.",
+    skipped_msg="Elementos nao modificados: {}",
+):
     log("\n===== RESUMO =====")
     if update_log:
         for key, files in update_log.items():
             unique_files = sorted(set(files))
-            log(
-                "Descricao do elemento {} atualizada nos arquivos: {}".format(
-                    key, ", ".join(unique_files)
-                )
-            )
+            log(updated_msg.format(key, ", ".join(unique_files)))
     else:
-        log("Nenhum elemento foi atualizado.")
+        log(empty_msg)
 
     if skipped_log:
         skipped_keys = sorted(skipped_log.keys())
-        log("Elementos nao modificados: {}".format(", ".join(skipped_keys)))
+        log(skipped_msg.format(", ".join(skipped_keys)))
     log("==================")
 
 

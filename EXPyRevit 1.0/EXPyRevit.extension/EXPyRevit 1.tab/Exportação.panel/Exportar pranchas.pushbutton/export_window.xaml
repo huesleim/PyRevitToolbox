@@ -92,7 +92,8 @@
                                 </Grid.RowDefinitions>
 
                                 <Label Grid.Row="0" Grid.Column="0" Content="Formato do papel"/>
-                                <ComboBox x:Name="cmb_paper_format" Grid.Row="0" Grid.Column="1"/>
+                                <ComboBox x:Name="cmb_paper_format" Grid.Row="0" Grid.Column="1"
+                                          SelectionChanged="on_paper_format_changed"/>
 
                                 <Label Grid.Row="1" Grid.Column="0" Content="Orientação"/>
                                 <ComboBox x:Name="cmb_orientation" Grid.Row="1" Grid.Column="1"/>

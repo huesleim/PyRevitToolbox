@@ -3,7 +3,7 @@ from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
 from Autodesk.Revit.Exceptions import OperationCanceledException
 from Autodesk.Revit.DB import BuiltInCategory, Transaction
 from pyrevit import forms, script
-import traceback
+import helpers
 
 
 class FloorSelectionFilter(ISelectionFilter):
@@ -21,6 +21,7 @@ uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document 
 
 
+t = None
 try:
     plan = uidoc.ActiveView
     if plan.ViewType != plan.ViewType.AreaPlan:
@@ -57,4 +58,6 @@ try:
     forms.alert("Concluído")
     
 except Exception:
-    traceback.print_exc()
+    if t is not None and t.HasStarted() and not t.HasEnded():
+        t.RollBack()
+    helpers.print_error("Falha ao criar linhas de área")
