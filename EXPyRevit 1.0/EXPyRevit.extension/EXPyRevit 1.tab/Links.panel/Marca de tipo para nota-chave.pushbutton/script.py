@@ -19,6 +19,7 @@ CATEGORIES = [
     (BuiltInCategory.OST_Walls, "Paredes"),
     (BuiltInCategory.OST_Doors, "Portas"),
     (BuiltInCategory.OST_Windows, "Janelas"),
+    (BuiltInCategory.OST_PlumbingFixtures, "Peças Hidrossanitárias")
 ]
 
 
